@@ -165,7 +165,7 @@ export default function Workbench({ entry, onHome }: { entry: "demo" | "resume" 
         </div>
         {recTab === "comparison" && result && rec && <section role="tabpanel" id="panel-comparison" aria-labelledby="tab-comparison" className="workspace-panel builder-comparison comparison-tab"><Comparison baseline={p} result={result} rec={rec} universe={universe} /></section>}
       </div>}
-      {view === "talk-walk" && <TalkWalkPage universe={marketUniverse} market={market} datasetId={datasetId} />}
+      {view === "talk-walk" && <TalkWalkPage key={`${datasetId}:${market}`} universe={marketUniverse} market={market} datasetId={datasetId} status={dataStatus} />}
       {view === "sources" && <DataSourcesPage datasetId={datasetId} status={dataStatus} onDatasetChange={changeDataset} />}
       {view === "settings" && <Settings risk={state.risk} green={state.green} maxInvestment={state.maxInvestment} currency="HKD" onSave={(risk, green, maxInvestment) => { setState(s => ({ ...s, risk, green, maxInvestment })); setNotice("Settings saved."); }} />}
     </main></div>

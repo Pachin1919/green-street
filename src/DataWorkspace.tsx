@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowCounterClockwise, Database, DownloadSimple, FileArrowUp, MagnifyingGlass, WarningCircle } from "@phosphor-icons/react";
-import { dataLabel, dateRange, fetchDataSources, fetchDataStatus, fetchTalkWalk, readDataset } from "./dataset";
-import type { DataSources, DataStatus, Market, TalkWalkData, TalkWalkFirm } from "./dataset";
-import type { Universe } from "./live";
+import { ArrowCounterClockwise, Database, DownloadSimple, FileArrowUp, WarningCircle } from "@phosphor-icons/react";
+import { dataLabel, dateRange, fetchDataSources, fetchDataStatus, readDataset } from "./dataset";
+import type { DataSources, DataStatus, Market } from "./dataset";
+export { TalkWalkPage } from "./TalkWalkLearning";
 import { download } from "./portfolio";
 import { Button } from "./ui";
 import styles from "./DataWorkspace.module.css";
@@ -68,92 +68,5 @@ export function DataSourcesPage({ datasetId, status, onDatasetChange }: { datase
       {sources ? <div className="table-scroll"><table className="analysis-table"><thead><tr><th>Table / source</th><th>Market</th><th>Measure</th><th>Rows</th><th>Date range</th><th>Availability</th></tr></thead><tbody>{sources.sources.map(source => <tr key={source.key}><td><strong>{source.key}</strong><small className={styles.sourcePath}>{source.source}</small></td><td>{source.market === "hk" ? "Hong Kong" : source.market === "tw" ? "Taiwan" : source.market}</td><td>{source.kind}</td><td>{source.rows.toLocaleString()}</td><td>{dateRange(source.data_dates)}</td><td>{source.available ? "Available" : "Insufficient data"}</td></tr>)}</tbody></table></div> : <p className={styles.note}>{error ? "Source coverage is unavailable. Use the built-in dataset or retry the upload." : "Loading source coverage…"}</p>}
     </section>
     <section className="workspace-panel"><div className="panel-heading"><div><h2>Supported data routes</h2><p>Choose an import format that the adapter supports.</p></div></div><div className={styles.routes}><article><strong>Internal CSV / Parquet</strong><p>The backend reads configured local source tables. These are internal readers; this screen does not upload arbitrary CSV or Parquet tables.</p></article><article><strong>External SQL / API</strong><p>Export your source to the standard JSON dataset, then upload it above. Native database and API connections are not implemented.</p></article></div></section>
-  </div>;
-}
-
-function showValue(value: unknown): string {
-  if (value == null || value === "" || (typeof value === "number" && !Number.isFinite(value))) return "Insufficient data";
-  if (typeof value === "number") return value.toFixed(2);
-  if (typeof value === "boolean") return value ? "Signal detected" : "No signal detected";
-  if (typeof value === "object") return Object.entries(value as Record<string, unknown>).map(([key, val]) => `${friendlyKey(key)}: ${showValue(val)}`).join(" · ");
-  return String(value);
-}
-function friendlyKey(key: string) { return key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()); }
-function assessment(row?: TalkWalkFirm) {
-  if (!row || row.talk == null || row.walk == null || row.gap == null || row.assessment_status === "insufficient_data") return "Insufficient data";
-  if (row.greenwasher === true) return "Greenwash signal detected";
-  if (row.greenhusher === true) return "Quiet-action signal detected";
-  if (row.greenwasher == null || row.greenhusher == null) return "Assessment available · signal classification not provided";
-  return "No signal detected";
-}
-function ScoreSummary({ row, scale, signal }: { row?: TalkWalkFirm; scale: string; signal?: string }) {
-  const meanings = { talk: "What the company says", walk: "Documented action / performance", gap: "Talk − Walk · + Talk higher / − Walk higher" };
-  return <><div className={styles.scores}>{(["talk", "walk", "gap"] as const).map(key => <div key={key}><span>{key === "gap" ? "Talk–walk gap" : friendlyKey(key)}</span><small>{meanings[key]}</small><strong>{key === "gap" && row?.gap != null && Number.isFinite(row.gap) && row.gap > 0 ? `+${showValue(row.gap)}` : showValue(row?.[key])}</strong>{key !== "gap" && row?.[key] != null && <meter aria-label={`${friendlyKey(key)} score`} min={0} max={10} value={row[key]} />}</div>)}</div><p className={styles.note}>{scale}{row?.year != null ? ` · ${row.year}` : ""}{signal ? ` · ${signal}` : ""}</p></>;
-}
-function ScoreExplanation({ data }: { data: TalkWalkData | null }) {
-  const methodology = data?.dictionary.methodology;
-  const hasRule = methodology?.rule === "high_talk_low_walk" && Number.isFinite(methodology.talk_min) && Number.isFinite(methodology.walk_max);
-  const threshold = (value: number) => Math.abs(value - 10 / 3) < 1e-10 ? "10/3 (≈3.33)" : String(value);
-  return <details className={styles.scoreExplanation}>
-    <summary>How to read these scores</summary>
-    <div className={styles.scoreExplanationBody}>
-      <p><strong>Gap = Talk − Walk.</strong> A positive gap means Talk is higher; a negative gap means Walk is higher. A large gap alone does not trigger a greenwash signal.</p>
-      <dl>
-        <div><dt>LLM semantic rubric</dt><dd>Talk rates environmental ambition, specificity and promotion. Walk rates documented reductions, capital investment, governance and verification. These are semantic ratings, not percentile ranks; the dictionary rule does not classify LLM scores.</dd></div>
-        <div><dt>Dictionary scores</dt><dd>Talk ranks environmental claim-word density. Walk ranks hard environmental performance, using carbon intensity by default in the engine. Ranks compare peers within the same sector and year on a 0–10 scale. Mounted datasets may use other Walk measures.</dd></div>
-      </dl>
-      <p><strong>{hasRule ? "Engine dictionary rule" : "Reference engine dictionary rule"}:</strong> Talk ≥ {hasRule ? threshold(methodology.talk_min) : "8"} <strong>AND</strong> Walk ≤ {hasRule ? threshold(methodology.walk_max) : "10/3 (≈3.33)"}. Both conditions must hold. The reference engine uses the top quintile for Talk and bottom tercile for Walk.</p>
-      {!hasRule && <p>The active dataset has not supplied supported classifier thresholds. The reference rule below explains the engine; it does not establish this dataset’s classification.</p>}
-      <p>Actual signals come from the dataset’s classification flags. Displayed scores are rounded; this page does not recalculate those flags. Missing scores or flags remain unclassified.</p>
-      <div className="table-scroll"><table className={styles.ruleExamples}><caption>Illustrative examples using the reference engine rule</caption><thead><tr><th>Talk</th><th>Walk</th><th>Gap</th><th>Greenwash signal</th></tr></thead><tbody><tr><td>6</td><td>1</td><td>+5</td><td>No · Talk is below 8</td></tr><tr><td>9</td><td>5</td><td>+4</td><td>No · Walk is above 10/3</td></tr><tr><td>9</td><td>2</td><td>+7</td><td>Yes · Both conditions hold</td></tr></tbody></table></div>
-      <p>A signal calls for investigation of the supporting evidence; it is not a finding of misconduct.</p>
-    </div>
-  </details>;
-}
-export function TalkWalkPage({ universe, market, datasetId }: { universe: Universe | null; market: Market; datasetId: string }) {
-  const [query, setQuery] = useState(""), [selected, setSelected] = useState("");
-  const [chooserOpen, setChooserOpen] = useState(true);
-  const [selectedYear, setSelectedYear] = useState("");
-  const [data, setData] = useState<TalkWalkData | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(false);
-  const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  const matches = [...(universe?.values() ?? [])].filter(c => words.every(w => `${c.name} ${c.ticker} ${c.sector}`.toLowerCase().includes(w)));
-  const company = universe?.get(selected);
-  useEffect(() => { setSelected(""); setChooserOpen(true); setQuery(""); setData(null); setError(""); }, [market, datasetId]);
-  useEffect(() => {
-    if (!selected) { setData(null); setError(""); setLoading(false); return; }
-    let active = true; setData(null); setError(""); setLoading(true);
-    fetchTalkWalk(market, selected).then(result => { if (active) setData(result); }).catch(err => { if (active) setError(err.message); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [selected, market, datasetId]);
-  const semanticYears = data?.semantic_llm.firms.slice().sort((a, b) => (b.year ?? 0) - (a.year ?? 0)) ?? [];
-  const semantic = semanticYears.find(row => String(row.year) === selectedYear) ?? semanticYears[0];
-  const dictionary = data?.dictionary.firms.slice().sort((a, b) => (b.year ?? 0) - (a.year ?? 0))[0];
-  const documents = semantic?.documents ?? [];
-  return <div className={`workspace-page ${styles.page}`}>
-    <div className="workspace-heading"><div><span className="workspace-eyebrow">ENVIRONMENTAL EVIDENCE</span><h1>Talk &amp; Walk</h1><p>Compare stated environmental ambition with documented action.</p></div></div>
-    <section className="workspace-panel"><div className="panel-heading"><div><h2>{selected ? company?.name ?? selected : "Select a company"}</h2><p>{selected ? `${selected} · Company selected` : `${universe?.size ?? 0} companies in the selected listing market.`}</p></div>{selected && <Button kind="secondary" onClick={() => setChooserOpen(open => !open)}>{chooserOpen ? "Close company selection" : "Change company"}</Button>}</div>
-      <div hidden={!!selected && !chooserOpen}>
-      <div className="company-keyword-input"><MagnifyingGlass size={19} /><input value={query} aria-label="Search Talk & Walk companies" placeholder="Search company, ticker or sector" onChange={e => setQuery(e.target.value)} /></div>
-      <div className={styles.companyChoices}>{matches.slice(0, 6).map(c => <button type="button" key={c.ticker} aria-pressed={selected === c.ticker} onClick={() => { setSelected(c.ticker); setChooserOpen(false); setSelectedYear(""); }}><strong>{c.name}</strong><small>{c.ticker} · {c.sector}</small></button>)}</div>
-      {matches.length > 6 && <p className={styles.note}>Showing 6 of {matches.length} matches. Search to find your company.</p>}
-      {!matches.length && <p className={styles.note} role="status">{universe ? "No matching companies in this market." : "Loading companies…"}</p>}
-      </div>
-    </section>
-    {!selected && <section className="workspace-panel"><p className={styles.note}>Select a company to review its available LLM dimensions, supporting documents and separate dictionary scores.</p></section>}
-    {selected && <><section className="workspace-panel"><div className="panel-heading"><div><h2>{company?.name ?? selected}</h2><p>{selected} · {company?.listing_market === "hk" || selected.endsWith(".HK") ? "Hong Kong listing" : "Taiwan listing"}{company?.domicile ? ` · Domicile: ${company.domicile}` : ""}{company?.model_proxy ? ` · Model proxy: ${company.model_proxy}` : ""}</p></div></div>
-      <div className={styles.semanticHeading}><h3 className={styles.subheading}>LLM semantic assessment</h3>{semanticYears.length > 1 && <label>Period<select aria-label="LLM assessment period" value={String(semantic?.year)} onChange={e => setSelectedYear(e.target.value)}>{semanticYears.map(row => <option key={row.year} value={row.year}>{row.year}</option>)}</select></label>}</div><p className={styles.note}>Stored assessments from the active dataset’s filings. Selecting a company reads existing evidence; it does not run a real-time LLM.</p>
-      {loading ? <p role="status">Loading company evidence…</p> : error ? <p className="form-error" role="alert">{error}</p> : <><ScoreSummary row={semantic} scale={data?.semantic_llm.scale ?? "0–10 semantic rubric"} signal={assessment(semantic)} />
-        {semantic?.dimensions && Object.keys(semantic.dimensions).length > 0 && <details className={styles.dimensionDetails}><summary>View {Object.keys(semantic.dimensions).length} LLM dimensions</summary><div className={styles.dimensions}>{Object.entries(semantic.dimensions).map(([dimension, value]) => <article key={dimension}><span>{friendlyKey(dimension)}</span><strong>{showValue(value)}</strong></article>)}</div></details>}
-        {!semantic && <p className={styles.note}>Insufficient data · No stored LLM assessment is available for this company in the selected dataset.</p>}
-        <p className={styles.note}>A missing assessment is not a negative result. “No signal detected” describes the available evidence and does not certify a company as safe.</p></>}
-    </section>
-    <section className="workspace-panel"><div className="panel-heading"><div><h2>Document evidence</h2><p>{documents.length} documents in the displayed LLM assessment.</p></div></div>
-      {documents.length ? documents.map((document, index) => <details className={styles.document} key={`${document.source_url}-${index}`}><summary><strong>{document.period || "Period unavailable"}</strong> · Filed {document.filing_date || "date unavailable"}{document.model ? ` · ${document.model}` : ""}</summary>{document.summary && <p>{document.summary}</p>}{document.source_url && /^https?:\/\//i.test(document.source_url) && <a href={document.source_url} target="_blank" rel="noreferrer">Open source document ↗</a>}
-        <div className={styles.evidence}><div><h3>Talk evidence</h3>{document.evidence_talk?.length ? <ul>{document.evidence_talk.map((item, i) => <li key={i}>{showValue(item)}</li>)}</ul> : <p>Insufficient data</p>}</div><div><h3>Walk evidence</h3>{document.evidence_walk?.length ? <ul>{document.evidence_walk.map((item, i) => <li key={i}>{showValue(item)}</li>)}</ul> : <p>Insufficient data</p>}</div></div>
-        {document.dimensions && Object.keys(document.dimensions).length > 0 && <details><summary>Document dimensions</summary><dl className={styles.documentDimensions}>{Object.entries(document.dimensions).map(([key, value]) => <div key={key}><dt>{friendlyKey(key)}</dt><dd>{showValue(value)}</dd></div>)}</dl></details>}
-      </details>) : <p className={styles.note}>{loading ? "Loading documents…" : "Insufficient data · No supporting LLM documents are available in this dataset."}</p>}
-    </section>
-    <section className="workspace-panel"><div className="panel-heading"><div><h2>Dictionary assessment</h2><p>Keyword and sector-relative scores, shown separately from the LLM rubric.</p></div></div><ScoreSummary row={dictionary} scale={data?.dictionary.scale ?? "0–10 within-sector percentile"} signal={assessment(dictionary)} />{!dictionary && <p className={styles.note}>Insufficient data · No dictionary assessment is available for this company.</p>}<ScoreExplanation data={data} /></section>
-    {data?.limitations?.length ? <section className="workspace-panel"><h2>Coverage notes</h2><ul className={styles.limitations}>{data.limitations.map(note => <li key={note}>{note}</li>)}</ul></section> : null}</>}
   </div>;
 }
