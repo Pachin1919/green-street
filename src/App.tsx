@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
 import { ArrowRight, ArrowsLeftRight, ChartLineUp, CheckCircle, Compass, FileArrowUp, Gauge, Info, Leaf, ListChecks, LockKey, ShieldCheck, SlidersHorizontal, Sparkle, TrendUp } from "@phosphor-icons/react";
 import Workbench from "./Workbench";
 import Brand from "./Brand";
-function Button({ children, kind = "primary", onClick, disabled }: { children: ReactNode; kind?: "primary" | "secondary" | "ghost"; onClick?: () => void; disabled?: boolean }) {
-  return <button type="button" className={`button ${kind}`} onClick={onClick} disabled={disabled}>{children}</button>;
-}
+import { Button } from "./ui";
 
 function MiniWorkbench() {
   return <div className="mini-workbench" aria-label="Portfolio metric preview">
