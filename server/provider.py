@@ -192,7 +192,8 @@ def schema_endpoint():
     return {"version": 1, "format": "esgx-snapshot-bundle", "max_bytes": MAX_BYTES, "max_rows": MAX_ROWS,
             "required_by_market": REQUIRED, "units": UNITS, "currencies": CURRENCIES,
             "supported_tables": {k: {"required_columns": cols, "unique_key": keys, "market": market_for(k)} for k, (_, _, cols, keys) in SPECS.items()},
-            "metadata": {"required": ["source", "markets", "units", "currencies"], "latest": "Ignored: uploaded freshness claims are never trusted"},
+            "metadata": {"required": ["source", "markets", "units", "currencies"], "latest": "Ignored: uploaded freshness claims are never trusted",
+                         "talk_walk_methodology": {"optional": True, "rule": "high_talk_low_walk", "talk_min": "finite number in [0,10]", "walk_max": "finite number in [0,10]", "source": "nonempty source description; dataset-supplied declaration, not independently verified"}},
             "example": {"metadata": {"source": "Your source/export description", "markets": ["hk"], "units": UNITS, "currencies": {k: v for k, v in CURRENCIES.items() if k in REQUIRED["hk"]}}, "tables": {k: [] for k in REQUIRED["hk"]}},
             "limitations": ["Complete hk or tw market bundle required; empty required tables are rejected. At least 24 price/factor/FX months must overlap.", "API/SQL systems must export this contract; native connectors are not implemented.", "Immutable in-memory selection survives only until server restart; default builtin data is unchanged."]}
 
@@ -207,8 +208,16 @@ def validate_bundle(bundle):
     meta, tables = bundle["metadata"], bundle["tables"]
     if not isinstance(meta, dict) or not isinstance(tables, dict):
         fail("metadata and tables must be objects.")
-    if set(meta) - {"source", "markets", "units", "currencies", "snapshot_date", "is_latest", "latest"}:
+    if set(meta) - {"source", "markets", "units", "currencies", "snapshot_date", "is_latest", "latest", "talk_walk_methodology"}:
         fail("Unsupported metadata fields; credentials, connector URLs, SQL and filesystem paths are not accepted.")
+    if "talk_walk_methodology" in meta:
+        rule = meta["talk_walk_methodology"]
+        if (not isinstance(rule, dict) or set(rule) != {"rule", "talk_min", "walk_max", "source"}
+                or rule.get("rule") != "high_talk_low_walk"
+                or not isinstance(rule.get("source"), str) or not 1 <= len(rule["source"].strip()) <= 2000
+                or any(isinstance(rule.get(k), bool) or not isinstance(rule.get(k), (int, float))
+                       or not math.isfinite(rule[k]) or not 0 <= rule[k] <= 10 for k in ("talk_min", "walk_max"))):
+            fail("metadata.talk_walk_methodology requires rule=high_talk_low_walk, finite talk_min/walk_max in [0,10], and source.")
     if not isinstance(meta.get("source"), str) or not 1 <= len(meta["source"].strip()) <= 2000:
         fail("metadata.source must identify the source (1-2000 characters).")
     markets = meta.get("markets")
@@ -391,11 +400,108 @@ def dimensions(row):
     return {k: clean(v) for k, v in row.items() if k.startswith(("talk_", "walk_")) and k not in ("talk_unfiltered", "walk_composite", "walk_intensity_trend", "walk_emission_trend")}
 
 
+def raw_table(store, path):
+    """Preserve stored CSV float precision for teaching and threshold comparisons."""
+    return pd.read_csv(path, float_precision="round_trip") if path.exists() and path.suffix == ".csv" else store.table(path)
+
+
+def raw_number(value):
+    value = clean(value)
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def raw_text(value):
+    value = clean(value)
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def raw_flag(value):
+    value = clean(value)
+    if isinstance(value, bool):
+        return value
+    return bool(value) if raw_number(value) in (0, 1) else None
+
+
+def exact_rows(frame):
+    """Duplicate firm-year records are ambiguous, including identical duplicates."""
+    rows = {}
+    if not {"firm_id", "year"}.issubset(frame.columns):
+        return rows
+    for row in frame.to_dict("records"):
+        key = (raw_text(row.get("firm_id")), raw_number(row.get("year")))
+        if None not in key:
+            rows[key] = None if key in rows else row
+    return rows
+
+
+def dictionary_methodology(store):
+    supplied = getattr(store, "metadata", {}).get("talk_walk_methodology")
+    if supplied:
+        return {**supplied, "provenance": "dataset_supplied", "rule_applies": True,
+                "gap_is_classifier": False, "independently_verified": False}
+    builtin = getattr(store, "dataset_id", "builtin") == "builtin"
+    return {"rule": "high_talk_low_walk", "talk_min": TALK_CUT, "walk_max": WALK_CUT,
+            "gap_is_classifier": False, "source": "esgx.measures.greenwash",
+            "provenance": "builtin_pipeline" if builtin else "reference_only", "rule_applies": builtin,
+            "independently_verified": False}
+
+
+def environmental_rows(store, market, normalized):
+    paths = store._paths()
+    green_key = "greenness" if market == "hk" else "greenness_tw"
+    tables = {name: exact_rows(raw_table(store, paths[key])) for name, key in
+              (("greenness", green_key), ("walk", f"walk_{market}"), ("dictionary", f"dictionary_{market}"),
+               ("fundamentals", f"fundamentals_{market}"), ("emissions", f"emissions_{market}"))}
+    # Builtin HK extraction is a processed parquet; mounted exports use the documented CSV.
+    if market == "hk" and not paths["emissions_hk"].exists() and getattr(store, "dataset_id", "builtin") == "builtin":
+        tables["emissions"] = exact_rows(store.table(store.processed / "emissions_hk.parquet"))
+    universe_sectors = {}
+    for key in (("universe_hsi", "universe_hsci") if market == "hk" else ("universe_twse",)):
+        for row in store.table(paths[key]).to_dict("records"):
+            firm = raw_text(row.get("firm_id"))
+            if firm:
+                universe_sectors[firm] = None if firm in universe_sectors else raw_text(row.get("sector"))
+    keys = set(tables["greenness"]) | set(tables["walk"]) | set(tables["dictionary"])
+    result = []
+    for firm, year in sorted(keys):
+        if normalized and firm.upper() != normalized:
+            continue
+        rows = {name: table.get((firm, year)) or {} for name, table in tables.items()}
+        g, w, d, f, e = (rows[name] for name in ("greenness", "walk", "dictionary", "fundamentals", "emissions"))
+        item = {"firm_id": firm, "market": market, "year": year,
+                **{field: raw_number(g.get(field)) for field in ("e_score", "e_weight", "g")},
+                "provider": raw_text(g.get("provider")),
+                "sector": raw_text(w.get("sector")) or raw_text(d.get("sector")) or raw_text(g.get("sector")) or universe_sectors.get(firm),
+                "intensity": raw_number(w.get("intensity")), "scope1": raw_number(e.get("scope1")),
+                "scope2": raw_number(e.get("scope2")), "revenue": raw_number(f.get("revenue")),
+                "rank": raw_number(w.get("rank")), "comparison_count": raw_number(w.get("comparison_count")),
+                "rank_group": raw_text(w.get("rank_group")),
+                "source": paths[green_key].name,
+                "input_source": raw_text(e.get("source")),
+                "dataset_source": getattr(store, "source", "Local pipeline snapshot")}
+        if (firm, year) not in tables["walk"]:
+            item["intensity"] = raw_number(d.get("intensity"))
+        walk = raw_number(w.get("walk"))
+        # Dictionary equality cannot establish which walk variant produced E_score.
+        item["walk_matches_e_score"] = walk is not None and item["e_score"] is not None and walk == item["e_score"]
+        level = raw_number(w.get("walk_intensity_level"))
+        item["default_hard_values_match"] = item["walk_matches_e_score"] and level is not None and level == walk
+        # Saved numerical equality cannot distinguish coincidentally equal multi-walk.
+        # No pipeline run-option provenance is currently supplied by these snapshots.
+        item["default_hard_path"] = False
+        item["score_path_provenance"] = "numerical_equality_only" if item["default_hard_values_match"] else "not_confirmed"
+        item["missing_fields"] = [k for k, value in item.items() if value is None]
+        item["ambiguous_tables"] = [name for name, table in tables.items() if (firm, year) in table and table[(firm, year)] is None]
+        result.append(item)
+    return result
+
+
 @router.get("/talk-walk")
 def talk_walk_endpoint(store: Store, market: str = "all", firm_id: str | None = None):
     if market not in ("hk", "tw", "all"):
         raise HTTPException(400, "market must be hk, tw, or all")
-    semantic, dictionary, document_count = [], [], 0
+    semantic, dictionary, environmental, document_count = [], [], [], 0
+    normalized = firm_id.upper().replace("-HK", ".HK").replace("-TW", ".TW") if firm_id else None
     for m in (("hk", "tw") if market == "all" else (market,)):
         paths = store._paths()
         suffix = "" if m == "hk" else "_tw"
@@ -414,22 +520,38 @@ def talk_walk_endpoint(store: Store, market: str = "all", firm_id: str | None = 
                           "model": d.get("usage_model"), "dimensions": dimensions(d), "skipped": d.get("skipped", False)} for d in docs.to_dict("records")]
             document_count += len(doc_items)
             semantic.append({"firm_id": row["firm_id"], "market": m, "year": row["year"], "talk": row.get("talk"), "walk": row.get("walk"), "gap": row.get("gap"),
+                             "source": paths[f"talkwalk_firm_year{suffix}"].name,
                              "assessment_status": "evidence_available" if doc_items else "insufficient_data", "dimensions": dimensions(row), "documents": doc_items,
                              "greenwasher": None, "greenhusher": None})
-        dict_frame = store.table(paths[f"dictionary_{m}"])
+        environmental.extend(environmental_rows(store, m, normalized))
+        dict_frame = raw_table(store, paths[f"dictionary_{m}"])
         if firm_id and "firm_id" in dict_frame:
             dict_frame = dict_frame[dict_frame.firm_id.str.upper() == normalized]
-        from server.adapter import format_company_for_ui
         for row in dict_frame.to_dict("records"):
-            company = format_company_for_ui(row)
-            dictionary.append({"firm_id": row["firm_id"], "market": m, "year": row["year"], **{k: company[k] for k in ("talk", "walk", "gap", "greenwasher", "greenhusher", "assessment_status")}})
+            values = {k: raw_number(row.get(k)) for k in ("talk", "walk", "gap")}
+            flags = {k: raw_flag(row.get(k)) for k in ("greenwasher", "greenhusher")}
+            assessed = all(values[k] is not None for k in ("talk", "walk")) and all(v is not None for v in flags.values())
+            dictionary.append({"firm_id": row["firm_id"], "market": m, "year": row["year"], **values,
+                               "source": paths[f"dictionary_{m}"].name,
+                               "claim_per_1000": raw_number(row.get("claim_per_1000")),
+                               "rank_group": raw_text(row.get("rank_group")),
+                               **{k: v if assessed else None for k, v in flags.items()},
+                               "assessment_status": "assessed" if assessed else "insufficient_data"})
     return clean({"dataset_id": getattr(store, "dataset_id", "builtin"), "market": market,
                   "assessment_status": "evidence_available" if semantic or dictionary else "insufficient_data",
                   "semantic_llm": {"kind": "semantic_llm", "scale": "0-10 semantic rubric", "firms": semantic, "coverage": {"firms": len({r["firm_id"] for r in semantic}), "documents": document_count},
                                    "methodology": {"classification": "not_provided", "gap_is_classifier": False}},
                   "dictionary": {"kind": "dictionary", "scale": "0-10 within-sector percentile", "firms": dictionary,
-                                 "methodology": {"rule": "high_talk_low_walk", "talk_min": TALK_CUT, "walk_max": WALK_CUT,
-                                                 "gap_is_classifier": False, "source": "esgx.measures.greenwash"}},
+                                 "methodology": dictionary_methodology(store)},
+                  "environmental": {"firms": environmental, "methodology": {
+                      "formula": "g = -(10 - e_score) * e_weight / 100", "g_source": "saved_greenness_table",
+                      "score_source": "saved_firm_year_tables", "raw_inputs": True, "missing_policy": "null_without_defaults_or_reconstruction",
+                      "default_hard_path": "Unconfirmed without pipeline run-option provenance; saved equality only establishes default_hard_values_match, even when provider is walk_hard",
+                      "default_hard_reference": {"scope": "scope1 + scope2", "intensity_unit": "tCO2e / USD million revenue",
+                                                 "percentile": "average ties; (rank - 1)/(n - 1); lower intensity is greener; singleton score 5",
+                                                 "min_sector_size": 5, "small_sample_group": "_all pools only sectors below min_sector_size, within year",
+                                                 "e_weight": "5 + 45 * average percentile rank of industry aggregate intensity within year"},
+                      "reference_applies_to_all_rows": False}},
                   "limitations": ["LLM evidence summarizes report claims and is not an independent audit.", "Semantic rubric and dictionary percentile values must not be averaged or compared on a single scale."]})
 
 

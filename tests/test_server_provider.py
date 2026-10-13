@@ -163,6 +163,7 @@ def test_semantic_evidence_separate_from_dictionary(client):
     body = http.get("/api/talk-walk?market=hk&firm_id=0002-hk").json()
     semantic = body["semantic_llm"]["firms"][0]
     assert semantic["talk"] == 7 and semantic["greenwasher"] is None
+    assert semantic["source"] == "talkwalk_firm_year_hk.csv"
     assert semantic["documents"][0]["evidence_talk"] == ["Target claim"]
     assert semantic["documents"][0]["model"] == "test-model"
     assert body["dictionary"]["firms"][0]["talk"] == 9
@@ -186,6 +187,105 @@ def test_dated_fx_real_source_no_fallback(client):
     row = http.get("/api/data/fx").json()["rates"][0]
     assert row["date"] == "2023-12-29" and row["rate"] == 7.8 and row["source"] == "Historical official source"
     assert row["is_latest"] is False
+
+
+def test_talk_walk_raw_full_precision_no_adapter_defaults(client):
+    http, store = client
+    score = 10 / 3
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "provider": "walk_hard", "e_score": score,
+                   "e_weight": 17.123456789, "g": -1.1415637859333334}]).to_csv(store.outputs / "det_greenness_hk.csv", index=False)
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "walk": score, "walk_intensity_level": score,
+                   "intensity": 0.123456789012345, "sector": "Utilities", "rank_group": "_all"}]).to_csv(store.outputs / "det_walk_hk.csv", index=False)
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "talk": 7.999999999, "walk": score,
+                   "greenwasher": 0, "greenhusher": 0}]).to_csv(store.outputs / "det_greenwashing_hk.csv", index=False)
+    body = http.get("/api/talk-walk?market=hk").json()
+    dictionary = body["dictionary"]["firms"][0]
+    assert dictionary["talk"] == 7.999999999 and dictionary["walk"] == score
+    assert dictionary["gap"] is None and dictionary["greenwasher"] is False
+    assert dictionary["source"] == "det_greenwashing_hk.csv"
+    assert dictionary["claim_per_1000"] is None and dictionary["rank_group"] is None
+    row = body["environmental"]["firms"][0]
+    assert row["e_score"] == score and row["e_weight"] == 17.123456789
+    assert row["g"] == -1.1415637859333334
+    assert row["intensity"] == 0.123456789012345
+    assert row["walk_matches_e_score"] and row["default_hard_values_match"]
+    assert row["default_hard_path"] is False
+    assert row["source"] == "det_greenness_hk.csv" and row["input_source"] is None
+    assert row["score_path_provenance"] == "numerical_equality_only"
+    assert row["rank"] is None and row["comparison_count"] is None and row["revenue"] is None
+    assert row["scope1"] is None and row["scope2"] is None
+    assert body["dictionary"]["methodology"]["provenance"] == "builtin_pipeline"
+    assert body["environmental"]["methodology"]["reference_applies_to_all_rows"] is False
+
+
+@pytest.mark.parametrize("walk,level,confirmed", [(4.123456789, 4.123456789, True), (4.123456789, 2, False), (4.123456788, 4.123456788, False), (4.123456789, None, False)])
+def test_hard_path_requires_saved_exact_equality(client, walk, level, confirmed):
+    http, store = client
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "provider": "walk_hard", "e_score": 4.123456789, "e_weight": None, "g": None}]).to_csv(store.outputs / "det_greenness_hk.csv", index=False)
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "walk": walk, "walk_intensity_level": level}]).to_csv(store.outputs / "det_walk_hk.csv", index=False)
+    row = http.get("/api/talk-walk?market=hk").json()["environmental"]["firms"][0]
+    assert row["default_hard_values_match"] is confirmed
+    assert row["default_hard_path"] is False
+    assert row["e_weight"] is None and row["g"] is None
+
+
+def test_exact_year_duplicates_and_absent_walk_never_reconstruct(client):
+    http, store = client
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "provider": "walk_hard", "e_score": 8, "e_weight": 40, "g": -0.8}]).to_csv(store.outputs / "det_greenness_hk.csv", index=False)
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "scope1": 1, "scope2": 2, "source": "first"},
+                  {"firm_id": "0002.HK", "year": 2023, "scope1": 9, "scope2": 8, "source": "second"},
+                  {"firm_id": "0002.HK", "year": 2023, "scope1": 3, "scope2": 4, "source": "third"}]).to_csv(store.outputs / "emissions_hk.csv", index=False)
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2022, "revenue": 999}]).to_parquet(store.raw / "fundamentals_yf_hk.parquet", index=False)
+    row = http.get("/api/talk-walk?market=hk").json()["environmental"]["firms"][0]
+    assert row["scope1"] is None and row["scope2"] is None and row["revenue"] is None
+    assert row["intensity"] is None and row["rank"] is None and row["sector"] is None
+    assert not row["default_hard_path"] and not row["walk_matches_e_score"]
+    assert row["ambiguous_tables"] == ["emissions"]
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "walk": 8},
+                  {"firm_id": "0002.HK", "year": 2023, "walk": 1}]).to_csv(store.outputs / "det_walk_hk.csv", index=False)
+    row = http.get("/api/talk-walk?market=hk").json()["environmental"]["firms"][0]
+    assert not row["walk_matches_e_score"] and "walk" in row["ambiguous_tables"]
+
+
+def test_saved_boolean_flags_and_dictionary_inputs(client):
+    http, store = client
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "talk": 8.123456789, "walk": 2,
+                   "greenwasher": True, "greenhusher": False, "claim_per_1000": 0.987654321,
+                   "rank_group": "_all"}]).to_csv(store.outputs / "det_greenwashing_hk.csv", index=False)
+    row = http.get("/api/talk-walk?market=hk").json()["dictionary"]["firms"][0]
+    assert row["greenwasher"] is True and row["greenhusher"] is False
+    assert row["claim_per_1000"] == 0.987654321 and row["rank_group"] == "_all"
+    assert row["assessment_status"] == "assessed"
+
+
+@pytest.mark.parametrize("multi", [4.123456789, 7.5])
+def test_equal_scores_cannot_confirm_pipeline_variant(client, multi):
+    http, store = client
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "provider": "walk_hard", "e_score": 4.123456789}]).to_csv(store.outputs / "det_greenness_hk.csv", index=False)
+    pd.DataFrame([{"firm_id": "0002.HK", "year": 2023, "walk": 4.123456789, "walk_intensity_level": 4.123456789,
+                   "walk_multi": multi}]).to_csv(store.outputs / "det_walk_hk.csv", index=False)
+    pd.DataFrame([{"firm_id": "0002.HK", "sector": "Utilities"}]).to_parquet(store.raw / "universe_hsi.parquet", index=False)
+    row = http.get("/api/talk-walk?market=hk").json()["environmental"]["firms"][0]
+    assert row["walk_matches_e_score"] and row["default_hard_values_match"]
+    assert row["default_hard_path"] is False and row["score_path_provenance"] == "numerical_equality_only"
+    assert row["sector"] == "Utilities" and row["rank_group"] is None
+
+
+def test_mounted_rule_provenance_and_custom_contract(client):
+    http, _ = client
+    payload = bundle()
+    mounted = http.post("/api/data/mount", json=payload).json()
+    method = http.get("/api/talk-walk", headers=mounted["selection_header"]).json()["dictionary"]["methodology"]
+    assert method["provenance"] == "reference_only" and method["rule_applies"] is False
+    payload["metadata"]["talk_walk_methodology"] = {"rule": "high_talk_low_walk", "talk_min": 7.5, "walk_max": 2.25, "source": "Export's documented thresholds"}
+    mounted = http.post("/api/data/mount", json=payload)
+    assert mounted.status_code == 200, mounted.text
+    method = http.get("/api/talk-walk", headers=mounted.json()["selection_header"]).json()["dictionary"]["methodology"]
+    assert method["provenance"] == "dataset_supplied" and method["rule_applies"] is True
+    assert method["talk_min"] == 7.5 and method["walk_max"] == 2.25
+    assert method["independently_verified"] is False
+    payload["metadata"]["talk_walk_methodology"]["talk_min"] = True
+    assert http.post("/api/data/mount", json=payload).status_code == 422
 
 
 @pytest.mark.parametrize("talk,walk,flagged", [(6, 1, False), (9, 5, False), (9, 2, True), (8, 10 / 3, True), (7.999, 0, False), (9, 10 / 3 + 0.0001, False)])

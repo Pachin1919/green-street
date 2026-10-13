@@ -68,5 +68,62 @@
 .evidence li { margin-bottom:8px; overflow-wrap:anywhere; }
 .documentDimensions div { display:grid; grid-template-columns:160px minmax(0,1fr); gap:15px; margin:8px 0; }
 .documentDimensions dd { margin:0; overflow-wrap:anywhere; }
+.translation { color:#68798b; font-size:12px; font-weight:400; margin-left:8px; display:inline-block; }
+.datasetContext { margin:0; font-size:12px; color:#526578; overflow-wrap:anywhere; }
+.datasetContext span { color:#9b3535; }
+.primaryPanel { border-top:3px solid #51826b; }
+.primaryMetrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px; margin:6px 0 24px; }
+.primaryMetrics article { min-width:0; padding-left:16px; border-left:2px solid #cddfd5; }
+.primaryMetrics span,.claimReadout span { font-size:13px; color:#344b5e; }
+.primaryMetrics small,.claimReadout small { font-size:11px; color:#68798b; margin-left:6px; }
+.primaryMetrics strong { display:block; font-size:30px; color:#29493d; margin:8px 0; overflow-wrap:anywhere; }
+.primaryMetrics p,.claimReadout p { color:#68798b; font-size:12px; line-height:1.65; margin:0; }
+.yearControl { display:flex; gap:8px; align-items:center; font-size:12px; color:#526578; }
+.yearControl select { padding:7px 9px; font:inherit; border:1px solid #ccdcd3; border-radius:5px; background:white; max-width:100%; }
+.yearNotice { padding:9px 12px; background:#fff7ed; border-left:2px solid #b88b49; font-size:12px; color:#795b34; line-height:1.6; }
+.flow { display:flex; flex-wrap:wrap; gap:8px; font-size:13px; line-height:1.8; color:#365a47; background:#f1f7f4; padding:12px 14px; border-radius:6px; }
+.flow span { color:#84a391; }
+.calculationSteps > details { border-top:1px solid #e3eaf0; font-size:13px; line-height:1.8; }
+.calculationSteps > details > summary { padding:12px 0; color:#345945; cursor:pointer; }
+.calculationSteps summary small { margin-left:8px; color:#68798b; }
+.stepBody { padding:2px 0 14px; max-width:900px; color:#596c7d; }
+.stepBody p { margin:10px 0; }
+.formula { padding:14px 16px; background:#f5f8f6; border:1px solid #e0e9e3; border-radius:6px; color:#29493d; font-size:15px; font-family:var(--font-body),sans-serif; line-height:1.9; overflow-wrap:anywhere; }
+.symbols { font-size:12px; line-height:1.8; color:#68798b; margin:8px 0 16px; }
+.inputFacts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:16px 0; }
+.inputFacts dt { font-size:11px; color:#68798b; }
+.inputFacts dd { margin:4px 0 0; font-size:13px; color:#344b5e; overflow-wrap:anywhere; }
+.claimReadout { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:22px; }
+.claimReadout strong { font-size:21px; display:block; margin:9px 0; color:#344b5e; overflow-wrap:anywhere; }
+.signal { padding:12px 14px; background:#f6f8fa; border-radius:6px; font-size:12px; color:#344b5e; line-height:1.8; margin:18px 0 10px; }
+.signal span { display:block; color:#68798b; }
+.ruleScenarios { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; font-size:12px; }
+.ruleScenarios b { display:block; color:#344b5e; }
+.semanticPanel :global(.panel-heading) { align-items:flex-start; }
+.semanticNotice { background:#f6f8fa; padding:12px 14px; border-radius:6px; line-height:1.8; font-size:13px; color:#344b5e; margin:0 0 18px; }
+.semanticNotice span { display:block; color:#68798b; margin-top:4px; font-size:12px; }
+.reportEvidence { padding:16px 0; font-size:13px; line-height:1.8; color:#596c7d; }
+.reportEvidence + .reportEvidence { border-top:1px solid #e3eaf0; }
+.reportHeading { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; font-size:12px; color:#68798b; }
+.reportHeading strong { color:#344b5e; }
+.sourceLink { display:block; margin-top:10px; color:#287355; font-size:12px; }
+.sourceLink small { display:block; font-size:10px; line-height:1.6; overflow-wrap:anywhere; }
+.reportSummary { margin:14px 0; max-width:950px; }
+.semanticReadout { display:flex; flex-wrap:wrap; gap:16px 50px; padding-top:14px; border-top:1px solid #e3eaf0; font-size:13px; color:#344b5e; }
+.semanticReadout p { margin:0; }
+.semanticReadout small { display:block; margin:4px 0; font-size:11px; color:#68798b; }
+.semanticReadout b { font-size:16px; font-weight:600; }
+.formulaLab { display:grid; grid-template-columns:1fr 1fr 1.25fr; gap:18px; align-items:center; }
+.formulaLab label { font-size:12px; color:#526578; }
+.formulaLab input { display:block; width:100%; margin-top:8px; padding:10px 12px; border:1px solid #ccdcd3; border-radius:5px; font:inherit; color:#29493d; background:white; }
+.formulaLab output { padding:12px 16px; border-radius:6px; background:#f1f7f4; color:#29493d; }
+.formulaLab output span { font-size:12px; display:block; }
+.formulaLab output strong { font-size:24px; display:block; margin-top:5px; }
+.labDirection { font-size:13px; line-height:1.8; color:#365a47; }
+.portfolioPath { font-size:13px; line-height:1.8; color:#365a47; }
+.coverageNotes { margin-top:20px; font-size:12px; color:#68798b; }
+.coverageNotes summary { cursor:pointer; }
+.page select:focus-visible,.page input:focus-visible,.page summary:focus-visible,.page a:focus-visible,.companyChoices button:focus-visible { outline:2px solid #387c60; outline-offset:3px; }
 @media(max-width:1050px) { .statusBar { flex-wrap:wrap; } .statusBar > div { flex-basis:100%; } .companyChoices { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media(max-width:600px) { .statusBar { padding:11px 12px; gap:10px; } .statusBar label { flex:1; white-space:normal; } .statusBar select { min-width:0; width:100%; } .coverage,.routes,.companyChoices,.dimensions,.evidence { grid-template-columns:1fr; } .scores { gap:8px; } .scores strong { font-size:19px; } .documentDimensions div { grid-template-columns:1fr; gap:3px; } }
+@media(max-width:700px) { .page :global(.panel-heading) { flex-wrap:wrap; gap:12px; } .primaryMetrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 12px; } .primaryMetrics article { padding-left:9px; } .primaryMetrics article:last-child { grid-column:1 / -1; } .primaryMetrics strong { font-size:22px; } .primaryMetrics small { display:block; margin:5px 0 0; } .primaryMetrics p { font-size:11px; } .claimReadout { grid-template-columns:1fr; gap:15px; } .claimReadout > div { display:grid; grid-template-columns:1fr auto; gap:6px 12px; } .claimReadout strong { margin:0; } .claimReadout p { grid-column:1 / -1; } .inputFacts { grid-template-columns:repeat(2,minmax(0,1fr)); } .formulaLab { grid-template-columns:1fr 1fr; gap:12px; } .formulaLab output { grid-column:1 / -1; } .ruleScenarios { grid-template-columns:1fr; gap:0; } .formula { font-size:13px; padding:10px 12px; } .semanticReadout { flex-direction:column; } .yearControl { flex-wrap:wrap; } }

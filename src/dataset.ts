@@ -37,11 +37,22 @@ export type TalkWalkFirm = {
   firm_id: string; year?: number; talk: number | null; walk: number | null; gap: number | null;
   dimensions?: Record<string, unknown>; documents?: TalkWalkDocument[];
   greenwasher?: boolean | null; greenhusher?: boolean | null; assessment_status?: string;
+  source?: string; rank_group?: string | null; claim_per_1000?: number | null;
+};
+export type EnvironmentalFirm = {
+  firm_id: string; year?: number; e_score: number | null; e_weight: number | null; g: number | null;
+  provider?: string | null; sector?: string | null; intensity?: number | null;
+  scope1?: number | null; scope2?: number | null; revenue?: number | null;
+  rank?: number | null; comparison_count?: number | null; rank_group?: string | null;
+  walk_matches_e_score?: boolean; default_hard_path?: boolean; source?: string;
+  input_source?: string | null; dataset_source?: string; score_path_provenance?: string;
+  missing_fields?: string[];
 };
 export type TalkWalkData = {
   dataset_id: string; market: string; assessment_status?: string;
+  environmental?: { firms: EnvironmentalFirm[]; methodology?: Record<string, unknown> };
   semantic_llm: { kind: string; scale: string; firms: TalkWalkFirm[]; coverage: { firms: number; documents: number }; methodology?: { classification: string; gap_is_classifier: boolean } };
-  dictionary: { kind: string; scale: string; firms: TalkWalkFirm[]; methodology?: { rule: string; talk_min: number; walk_max: number; gap_is_classifier: boolean; source: string } };
+  dictionary: { kind: string; scale: string; firms: TalkWalkFirm[]; methodology?: { rule: string; talk_min: number; walk_max: number; gap_is_classifier: boolean; source: string; provenance?: string } };
   limitations: string[];
 };
 export async function readDataset<T>(path: string, init?: RequestInit): Promise<T> {
