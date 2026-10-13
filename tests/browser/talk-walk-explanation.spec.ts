@@ -58,15 +58,26 @@ test('CLP hard metrics lead while LLM evidence has a separate scale and meaning'
   const main = panel(page, /Environmental performance/), llm = panel(page, /Report evidence & LLM/);
   await expect(main.locator('article').getByText('1.88', { exact: true })).toBeVisible(); await expect(main.locator('article').getByText('50.00', { exact: true })).toBeVisible();
   await expect(main.locator('article').getByText('-4.0625', { exact: true })).toBeVisible(); await expect(llm.getByText('7.60 / 10', { exact: true })).toBeVisible();
-  await expect(llm).toContainText('不参与当前 g 计算'); await expect(llm).toContainText('Published / filed · 2026-03-11 · kimi-k3');
+  await expect(llm).toContainText('Not used in the current g calculation'); await expect(llm).toContainText('Published / filed · 2026-03-11 · kimi-k3');
   await expect(llm.getByRole('link', { name: /Open source document/ })).toHaveAttribute('href', 'https://example.org/report.pdf');
   await expect(llm.getByText('Measured emissions change', { exact: true })).toBeVisible();
-  expect(await page.locator('section').evaluateAll(sections => sections.findIndex(s => s.textContent?.includes('主要环境指标')) < sections.findIndex(s => s.textContent?.includes('报告证据与辅助评价')))).toBeTruthy();
+  expect(await page.locator('section').evaluateAll(sections => sections.findIndex(s => s.querySelector('#environment-heading')) < sections.findIndex(s => s.querySelector('#semantic-heading')))).toBeTruthy();
   const texts = await llm.locator('p').allTextContents(); expect(texts.findIndex(t => t.includes('Report basis'))).toBeLessThan(texts.findIndex(t => t.includes('Action evidence assessment')));
 });
 test('LLM scores meeting dictionary thresholds are never classified', async ({ page }) => {
   await openScores(page, response([firm(6, 1, 5, false)], [firm(9, 2, 7, true)]));
   const llm = panel(page, /Report evidence & LLM/); await expect(llm).toContainText('Dictionary rule does not classify LLM scores'); await expect(llm).not.toContainText('Greenwash signal detected');
+});
+test('default and expanded interfaces remain English', async ({ page }) => {
+  await openScores(page, response([firm(6, 1, 5, false)], [firm(6.5, 7.6, -1.1, null)]));
+  expect(await page.locator('main').innerText()).not.toMatch(/[\u3400-\u9fff]/);
+  await page.getByLabel('Hard-data year').focus();
+  await expect(page.getByLabel('Hard-data year')).toBeFocused();
+  await page.getByText('03 · E-score', { exact: true }).click();
+  await expect(panel(page, /Environmental performance/)).toContainText('A group with one valid value receives a score of 5');
+  await page.getByText('03 · E-score', { exact: true }).click();
+  for (const summary of await page.locator('main details > summary').all()) await summary.click();
+  expect(await page.locator('main').innerText()).not.toMatch(/[\u3400-\u9fff]/);
 });
 test('rounded scores preserve backend flags and supplied rule provenance', async ({ page }) => {
   const data = response([firm(7.9999, 3.3334, 4.6665, false)]);
@@ -77,26 +88,26 @@ test('rounded scores preserve backend flags and supplied rule provenance', async
 test('reference methodology never claims an active dataset rule', async ({ page }) => {
   const data = response([firm(2, 9, -7, null)]); data.dictionary.methodology!.provenance = 'reference_only';
   const claims = await openScores(page, data); await expect(claims.getByText('-7.00', { exact: true })).toBeVisible(); await expect(claims.getByRole('status')).toContainText('Insufficient data');
-  await claims.getByText(/Signal rule & Talk calculation/).click(); await expect(claims).toContainText('Reference rule · 参考规则'); await expect(claims.getByText('Dataset rule · 当前数据集规则', { exact: true })).toHaveCount(0);
+  await claims.getByText(/Signal rule & Talk calculation/).click(); await expect(claims).toContainText('Reference rule'); await expect(claims.getByText('Dataset rule', { exact: true })).toHaveCount(0);
 });
 test('missing scores are insufficient even when flags exist', async ({ page }) => {
   const claims = await openScores(page, response([firm(9, null, null, true)])); await expect(claims.getByRole('status')).toContainText('Insufficient data'); await expect(claims).not.toContainText('Greenwash signal detected'); await expect(page.getByText(/No stored LLM assessment is available/)).toBeVisible();
 });
 test('years are independent and sparse records do not substitute other years', async ({ page }) => {
   const data = response([firm(6, 1, 5, false, 2024)], [firm(6, 7.6, -1.6, null, 2025)]); data.environmental!.firms = [environmental({ year: 2024 })];
-  const claims = await openScores(page, data); await expect(page.getByText(/Years differ/)).toContainText('硬数据 2024 / LLM 报告 2025');
-  await page.getByLabel('Hard-data year · 评分年份').selectOption('2025'); await expect(claims).toContainText('No dictionary assessment is available for this company in 2025'); await expect(claims).not.toContainText('No signal detected');
-  await expect(panel(page, /Environmental performance/)).toContainText('该年份未提供唯一的环境评分记录');
-  await page.getByLabel('LLM report year · 报告年份').selectOption('2024'); await expect(panel(page, /Report evidence & LLM/)).toContainText('No stored LLM assessment is available for this company in 2024'); await expect(panel(page, /Report evidence & LLM/).getByText('7.60 / 10', { exact: true })).toHaveCount(0);
+  const claims = await openScores(page, data); await expect(page.getByText(/Years differ/)).toContainText('Hard data 2024 / LLM report 2025');
+  await page.getByLabel('Hard-data year').selectOption('2025'); await expect(claims).toContainText('No dictionary assessment is available for this company in 2025'); await expect(claims).not.toContainText('No signal detected');
+  await expect(panel(page, /Environmental performance/)).toContainText('No unique environmental score record');
+  await page.getByLabel('LLM report year').selectOption('2024'); await expect(panel(page, /Report evidence & LLM/)).toContainText('No stored LLM assessment is available for this company in 2024'); await expect(panel(page, /Report evidence & LLM/).getByText('7.60 / 10', { exact: true })).toHaveCount(0);
 });
 test('formula uses stored fields only and Walk equality requires confirmation', async ({ page }) => {
   const data = response(); data.environmental!.firms = [environmental({ e_weight: null, g: null })]; await openScores(page, data);
-  const main = panel(page, /Environmental performance/); await expect(main).toContainText('当前记录未确认使用默认碳强度路径');
-  await main.getByText(/01 · Emissions & revenue/).click(); await expect(main.locator('dl').first()).toContainText('当前数据未提供');
-  await main.getByText(/03 · E-score/).click(); await expect(main).toContainText('其他大行业不会加入'); await expect(main).toContainText('组内只有 1 个有效值时给 5 分'); await expect(main.getByText('30.00', { exact: true })).toHaveCount(0);
+  const main = panel(page, /Environmental performance/); await expect(main).toContainText('This record does not document the scoring pathway');
+  await main.getByText(/01 · Emissions & revenue/).click(); await expect(main.locator('dl').first()).toContainText('Not provided in this dataset');
+  await main.getByText(/03 · E-score/).click(); await expect(main).toContainText('larger sectors do not join it'); await expect(main).toContainText('A group with one valid value receives a score of 5'); await expect(main.getByText('30.00', { exact: true })).toHaveCount(0);
 });
 test('confirmed default path can identify hard Walk as E-score', async ({ page }) => {
-  const data = response(); data.environmental!.firms = [environmental({ default_hard_path: true, walk_matches_e_score: true })]; await openScores(page, data); await expect(page.getByText(/^硬数据 Walk = 当前 E-score/)).toBeVisible();
+  const data = response(); data.environmental!.firms = [environmental({ default_hard_path: true, walk_matches_e_score: true })]; await openScores(page, data); await expect(page.getByText(/^Hard-data Walk = current E-score/)).toBeVisible();
 });
 test('formula experiment changes direction without company mutations or API calls', async ({ page }) => {
   await openScores(page, response()); const main = panel(page, /Environmental performance/), before = await main.innerText();
@@ -104,13 +115,13 @@ test('formula experiment changes direction without company mutations or API call
   await page.getByLabel('Example E-score', { exact: true }).fill('8'); await expect(output).toContainText('-0.800');
   await page.getByLabel('Example E_weight', { exact: true }).fill('60'); await expect(output).toContainText('-1.200');
   await page.getByLabel('Example E-score', { exact: true }).fill('10'); await expect(output).toContainText('0.000');
-  await page.getByLabel('Example E-score', { exact: true }).fill(''); await expect(output).toContainText('请输入有效范围');
+  await page.getByLabel('Example E-score', { exact: true }).fill(''); await expect(output).toContainText('Enter valid example values');
   expect(await main.innerText()).toBe(before); expect(apiPaths.get(page)!.length).toBe(count);
 });
 test('company switch clears old evidence', async ({ page }) => {
   const first = response([firm(6, 1, 5, true)], [{ ...firm(6, 7, -1, null), documents: [{ summary: 'CLP exclusive evidence' }] }]); const second = response(); second.environmental!.firms = [];
   await openScores(page, first, second); await page.getByRole('button', { name: 'Change company' }).click(); await page.getByRole('button', { name: /HSBC Holdings/ }).click();
-  await expect(page.getByText('CLP exclusive evidence', { exact: true })).toHaveCount(0); await expect(page.getByText(/Greenwash signal detected/)).toHaveCount(0); await expect(panel(page, /Environmental performance/)).toContainText('未提供唯一的环境评分记录');
+  await expect(page.getByText('CLP exclusive evidence', { exact: true })).toHaveCount(0); await expect(page.getByText(/Greenwash signal detected/)).toHaveCount(0); await expect(panel(page, /Environmental performance/)).toContainText('No unique environmental score record');
 });
 test('reselecting the current company preserves loaded evidence', async ({ page }) => {
   await openScores(page, response([firm(6, 1, 5, false)]));
@@ -132,7 +143,7 @@ test('failed request exposes retry without prior scores', async ({ page }) => {
 });
 test('mobile formulas, links and keyboard disclosure remain usable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 }); const sem = { ...firm(6, 7.6, -1.6, null), documents: [{ source_url: 'https://example.org/reports/a-long-report-name-with-a-long-path.pdf', summary: 'Long report evidence', evidence_talk: ['Claim'], evidence_walk: ['Action'] }] };
-  await openScores(page, response([firm(6, 1, 5, false)], [sem])); await page.getByLabel('Hard-data year · 评分年份').focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Tab'); await page.keyboard.press('Enter');
+  await openScores(page, response([firm(6, 1, 5, false)], [sem])); await page.getByLabel('Hard-data year').focus(); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Tab'); await page.keyboard.press('Enter');
   await expect(panel(page, /Environmental performance/).locator('details').first()).toHaveAttribute('open'); await page.getByText(/03 · E-score/).click(); await page.getByText(/05 · Company g/).click();
   await expect(page.getByRole('link', { name: /Open source document/ })).toBeVisible(); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy(); await page.screenshot({ path: 'output/playwright/talkwalk-learning-test-mobile.png', fullPage: true });
 });
