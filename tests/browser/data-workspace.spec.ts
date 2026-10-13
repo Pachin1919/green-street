@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 const company = (ticker: string, name: string) => ({ id: ticker, ticker, name, sector: 'Utilities', industry: 'Utilities', score: 6, weight: 20, g: -80, carbon: 0, talk: null, walk: null, greenwasher: null, greenhusher: null, assessment_status: 'insufficient_data', notes: '', listing_market: ticker.endsWith('.HK') ? 'hk' : 'tw' });
 const companies = [company('0002.HK', 'CLP Holdings'), company('2330.TW', 'Taiwan Semiconductor')];
@@ -24,15 +25,102 @@ async function mockData(page: Page, mode = 'snapshot') {
   return requests;
 }
 
-test('snapshot is dated, never advertised as Live/Latest, and market selection filters Talk & Walk', async ({ page }) => {
+test('dated database is amber and market selection filters Talk & Walk', async ({ page }) => {
   const requests = await mockData(page);
   await page.goto('/app');
   await expect(page.getByText('Latest database data · 2026-08', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('status', { name: 'Database status' })).toContainText('Freshness unverified');
+  await expect(page.getByRole('status', { name: 'Database status' }).locator('..')).toHaveCSS('background-color', 'rgb(255, 250, 235)');
   await page.getByRole('button', { name: 'Talk & Walk', exact: true }).click();
   await page.getByLabel('Listing market').selectOption('tw');
   await expect(page.getByRole('button', { name: /Taiwan Semiconductor/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /CLP Holdings/ })).toHaveCount(0);
   expect(requests.some(r => r.path === '/api/companies' && r.market === 'tw')).toBeTruthy();
+});
+
+test('unavailable database is red and a verified current feed is green', async ({ page }) => {
+  await mockData(page, 'missing');
+  await page.goto('/app');
+  const bar = page.getByRole('status', { name: 'Database status' });
+  await expect(bar).toContainText('Database data unavailable');
+  await expect(bar.locator('..')).toHaveCSS('background-color', 'rgb(255, 247, 247)');
+  await page.route('**/api/data/status?**', route => route.fulfill({ json: { dataset_id: 'builtin', mode: 'live', is_latest: true, snapshot_date: '2026-10-13', markets: {}, missing_markets: [], limitations: [] } }));
+  await page.reload();
+  await expect(bar).toContainText('Live database · 2026-10-13');
+  await expect(bar.locator('..')).toHaveCSS('background-color', 'rgb(241, 248, 244)');
+});
+
+test('request failure is red while loading remains neutral', async ({ page }) => {
+  await mockData(page);
+  let finish: (() => void) | undefined;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  await page.route('**/api/data/status?**', async route => { await pending; await route.fulfill({ status: 503, json: { detail: 'Database temporarily unavailable' } }); });
+  await page.goto('/app');
+  const bar = page.getByRole('status', { name: 'Database status' });
+  await expect(bar).toContainText('Checking database data');
+  await expect(bar.locator('..')).toHaveCSS('background-color', 'rgb(246, 248, 250)');
+  finish!();
+  await expect(bar).toContainText('Database temporarily unavailable');
+  await expect(bar.locator('..')).toHaveCSS('background-color', 'rgb(255, 247, 247)');
+});
+
+test('portfolio help exports schema and a parser-compatible template', async ({ page }) => {
+  await mockData(page);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Upload portfolio', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  const help = dialog.locator('details').filter({ has: page.getByText('CSV format & export help', { exact: true }) });
+  await expect(help).not.toHaveAttribute('open');
+  await page.getByText('CSV format & export help', { exact: true }).click();
+  await expect(dialog.getByRole('row', { name: /current_holding_value/ })).toContainText('Not cost basis or allocation percentage');
+  const schemaDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download CSV schema' }).click();
+  const schemaFile = await schemaDownload;
+  expect(schemaFile.suggestedFilename()).toBe('green-street-portfolio-schema.json');
+  const schema = JSON.parse(await readFile((await schemaFile.path())!, 'utf8'));
+  expect(schema.required_columns).toEqual(['stock_code', 'current_holding_value', 'currency']);
+  expect(schema.format).toBe('csv');
+  const csvDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download template', exact: true }).click();
+  const csv = await csvDownload;
+  // Preserve the downloaded filename when creating the upload payload.
+  await page.getByLabel('Portfolio CSV').setInputFiles({ name: csv.suggestedFilename(), mimeType: 'text/csv', buffer: await readFile((await csv.path())!) });
+  await expect(dialog.getByText(/2 holdings/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Confirm upload' })).toBeEnabled();
+});
+
+test('AI instructions copy the complete contract and offer manual fallback', async ({ page }) => {
+  await page.addInitScript(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text: string) => { (window as unknown as { copiedInstructions: string }).copiedInstructions = text; } } }); });
+  await mockData(page);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Upload portfolio', exact: true }).click();
+  await page.getByText('CSV format & export help', { exact: true }).click();
+  await page.getByRole('button', { name: 'Copy AI instructions', exact: true }).click();
+  const text = await page.getByLabel('AI export instructions').inputValue();
+  expect(text).toContain('Never invent');
+  expect(text).toContain('Do not perform FX conversion');
+  expect(await page.evaluate(() => (window as unknown as { copiedInstructions: string }).copiedInstructions)).toBe(text);
+  await expect(page.getByRole('button', { name: 'Instructions copied' })).toBeVisible();
+  await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Permission denied'); } } }); });
+  await page.getByRole('button', { name: 'Instructions copied' }).click();
+  await expect(page.getByText(/Select and copy the instructions below/)).toBeVisible();
+});
+
+test('expanded upload help works with keyboard at mobile width', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockData(page);
+  await page.goto('/app');
+  await page.getByRole('button', { name: 'Upload portfolio', exact: true }).click();
+  const summary = page.getByText('CSV format & export help', { exact: true });
+  await summary.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByLabel('AI export instructions')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBeTruthy();
+  const dialog = page.getByRole('dialog');
+  expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBeTruthy();
+  expect(await dialog.innerText()).not.toMatch(/[\u3400-\u9fff]/);
+  await page.getByLabel('AI export instructions').focus();
+  await expect(page.getByLabel('AI export instructions')).toBeFocused();
+  await page.screenshot({ path: 'output/playwright/portfolio-import-help-mobile.png' });
 });
 
 test('missing semantic and dictionary evidence stays Insufficient data', async ({ page }) => {

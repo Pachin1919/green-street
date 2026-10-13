@@ -1,0 +1,24 @@
+.help { margin-top:18px; border:1px solid #dce5ed; border-radius:8px; text-align:left; background:white; font-size:13px; color:#526981; }
+.help > summary { cursor:pointer; padding:13px 15px; color:#315f9d; font-weight:600; }
+.help summary:focus-visible,.help textarea:focus-visible { outline:2px solid #39765e; outline-offset:3px; }
+.body { padding:0 16px 16px; line-height:1.7; }
+.body h4 { margin:18px 0 8px; color:#233d56; font-size:14px; }
+.body p { margin:10px 0; }
+.body ol { padding-left:20px; }
+.body li { margin:7px 0; }
+.tableScroll { width:100%; overflow:auto; margin:16px 0; }
+.tableScroll table { width:100%; border-collapse:collapse; text-align:left; font-size:12px; }
+.tableScroll caption { text-align:left; font-weight:600; color:#233d56; margin-bottom:10px; }
+.tableScroll th,.tableScroll td { padding:10px 8px; border-bottom:1px solid #e3eaf0; vertical-align:top; }
+.tableScroll th { color:#233d56; }
+.tableScroll td:first-child { width:168px; overflow-wrap:anywhere; }
+.tableScroll p { margin:5px 0 0; min-width:160px; }
+.body code,.body pre,.body textarea { font:12px/1.65 Consolas,monospace; }
+.body code { color:#355146; }
+.example { margin:14px 0; }
+.example > summary { cursor:pointer; color:#315f9d; }
+.example pre { padding:12px; background:#f6f8fa; border:1px solid #e3eaf0; border-radius:6px; overflow:auto; }
+.body textarea { display:block; width:100%; resize:vertical; min-height:150px; margin-top:12px; padding:12px; color:#344b5e; background:#f6f8fa; border:1px solid #d7e1ec; border-radius:6px; }
+.actions { display:flex; flex-wrap:wrap; gap:10px; }
+.note { font-size:12px; color:#68798b; }
+@media(max-width:540px) { .body { padding:0 12px 12px; } .tableScroll th,.tableScroll td { padding:8px 5px; } .tableScroll td:first-child { max-width:105px; } .tableScroll p { min-width:150px; } .body textarea { font-size:11px; } }
