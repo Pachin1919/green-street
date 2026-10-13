@@ -12,19 +12,6 @@ export const portfolioColumns = [
   { name: "asset_class", required: false, type: "text", example: "Equity", rule: "Defaults to Equity. For cash use Cash with stock_code set to a hyphen (-).", aliases: ["asset_type"] },
 ] as const;
 
-export const portfolioImportSchema = {
-  version: 1,
-  format: "csv",
-  description: "Green Street portfolio CSV format. This JSON describes CSV columns; upload holdings as CSV, not JSON.",
-  encoding: "UTF-8",
-  delimiter: ",",
-  max_bytes: 10 * 1024 * 1024,
-  required_columns: portfolioColumns.filter(c => c.required).map(c => c.name),
-  columns: portfolioColumns,
-  reporting_currency: "HKD",
-  rules: ["One header row and one or more holding rows. No totals or notes rows.", "Use positive decimal numbers without currency symbols or percentage signs.", "Quote cells containing commas. Each row must have the same number of columns as the header.", "Use actual holdings only. Unknown companies may remain unassessed; ticker lookup does not verify the supplied market values.", "FX conversion is performed during import using the selected dataset. Do not silently convert currencies in an AI export."],
-};
-
 export const portfolioAiInstructions = `Convert the holdings I provide below into a Green Street portfolio CSV.
 
 Use this header exactly:

@@ -64,7 +64,7 @@ test('request failure is red while loading remains neutral', async ({ page }) =>
   await expect(bar.locator('..')).toHaveCSS('background-color', 'rgb(255, 247, 247)');
 });
 
-test('portfolio help exports schema and a parser-compatible template', async ({ page }) => {
+test('portfolio help offers one parser-compatible CSV template', async ({ page }) => {
   await mockData(page);
   await page.goto('/app');
   await page.getByRole('button', { name: 'Upload portfolio', exact: true }).click();
@@ -73,15 +73,9 @@ test('portfolio help exports schema and a parser-compatible template', async ({ 
   await expect(help).not.toHaveAttribute('open');
   await page.getByText('CSV format & export help', { exact: true }).click();
   await expect(dialog.getByRole('row', { name: /current_holding_value/ })).toContainText('Not cost basis or allocation percentage');
-  const schemaDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download CSV schema' }).click();
-  const schemaFile = await schemaDownload;
-  expect(schemaFile.suggestedFilename()).toBe('green-street-portfolio-schema.json');
-  const schema = JSON.parse(await readFile((await schemaFile.path())!, 'utf8'));
-  expect(schema.required_columns).toEqual(['stock_code', 'current_holding_value', 'currency']);
-  expect(schema.format).toBe('csv');
+  await expect(dialog.getByRole('button', { name: /schema/i })).toHaveCount(0);
   const csvDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download template', exact: true }).click();
+  await page.getByRole('button', { name: 'Download CSV template', exact: true }).click();
   const csv = await csvDownload;
   // Preserve the downloaded filename when creating the upload payload.
   await page.getByLabel('Portfolio CSV').setInputFiles({ name: csv.suggestedFilename(), mimeType: 'text/csv', buffer: await readFile((await csv.path())!) });

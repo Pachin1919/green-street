@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Copy, DownloadSimple } from "@phosphor-icons/react";
-import { download } from "./portfolio";
-import { portfolioAiInstructions, portfolioColumns, portfolioExample, portfolioImportSchema } from "./portfolioImportGuide";
+import { Copy } from "@phosphor-icons/react";
+import { portfolioAiInstructions, portfolioColumns, portfolioExample } from "./portfolioImportGuide";
 import { Button } from "./ui";
 import styles from "./PortfolioImportHelp.module.css";
 
@@ -17,11 +16,9 @@ export default function PortfolioImportHelp() {
     <div className={styles.body}>
       <p>Create a CSV manually from your broker or spreadsheet, or copy the instructions below into your preferred AI tool.</p>
       <div className={styles.actions}>
-        <Button kind="secondary" onClick={() => download("green-street-portfolio-schema.json", JSON.stringify(portfolioImportSchema, null, 2), "application/json")}><DownloadSimple size={16} />Download CSV schema</Button>
         <Button kind="secondary" onClick={() => void copy()}><Copy size={16} />{copied ? "Instructions copied" : "Copy AI instructions"}</Button>
       </div>
       {(copied || copyError) && <p className={styles.note} role="status">{copyError || "Copied. Paste the instructions and your actual holdings into your AI tool."}</p>}
-      <p className={styles.note}>The schema describes the CSV columns. It is not a portfolio file; the upload above accepts CSV.</p>
       <h4>Export it yourself</h4>
       <ol><li>Export your current holdings from your broker, or copy them into a spreadsheet.</li><li>Use the column names below. Keep one row per position; remove totals and notes.</li><li>Save as CSV (UTF-8), then upload it here and review the parsed values before confirming.</li></ol>
       <div className={styles.tableScroll}><table><caption>Portfolio CSV columns</caption><thead><tr><th>Column</th><th>Required</th><th>Example / rule</th></tr></thead><tbody>{portfolioColumns.map(column => <tr key={column.name}><td><code>{column.name}</code></td><td>{column.required ? "Yes" : "Optional"}</td><td><code>{column.example}</code><p>{column.rule}</p></td></tr>)}</tbody></table></div>
