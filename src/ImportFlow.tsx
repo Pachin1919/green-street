@@ -6,6 +6,7 @@ import { exchangeRate } from "./marketData";
 import { fetchFx } from "./dataset";
 import type { FxRate } from "./dataset";
 import { Button } from "./ui";
+import PortfolioImportHelp from "./PortfolioImportHelp";
 
 export default function ImportFlow({ lookup, onImport }: { lookup: Lookup; onImport: (p: Portfolio) => void }) {
   const input = useRef<HTMLInputElement>(null);
@@ -35,7 +36,8 @@ export default function ImportFlow({ lookup, onImport }: { lookup: Lookup; onImp
   return <div className="setup-body import-body"><span className="setup-icon"><FileArrowUp /></span><h3>Import your current holdings.</h3><p>Use current market value, not original purchase cost. Reporting and optimization use HKD. Foreign values require an available dated FX pair in the selected dataset.</p>
     <input ref={input} type="file" accept=".csv,text/csv" aria-label="Portfolio CSV" className="sr-only" onChange={e => { void read(e.target.files?.[0]); }} />
     <Button kind="secondary" onClick={() => input.current?.click()} disabled={reading}><FileArrowUp />{reading ? "Reading CSV…" : parsed ? "Choose another CSV" : "Choose a CSV file"}</Button>
-    <div className="import-format"><span>Required: ticker (e.g. 0700.HK), current value, currency · Optional: units, unit_price</span><button onClick={() => download("green-street-portfolio-template.csv", importTemplate)}><DownloadSimple size={16} />Download template</button></div>
+    <div className="import-format"><span>Required: ticker (e.g. 0700.HK), current value, currency · Optional: units, unit_price</span><button onClick={() => download("green-street-portfolio-template.csv", importTemplate)}><DownloadSimple size={16} />Download CSV template</button></div>
+    <PortfolioImportHelp />
     {error && <p className="form-error" role="alert">{error}</p>}
     {parsed && <div className="import-review"><strong>{fileName} · {parsed.holdings.length} holdings</strong><p>Valuation date: {parsed.asOf}. {parsed.sourceCurrency ? `Market values are already expressed in ${parsed.sourceCurrency}; the stock-currency field is not applied again.` : "Values use the currency declared on each row."}</p><p><strong>Reporting currency: HKD</strong> · Capital amounts remain in HKD; model risk and excess return use USD.</p>
       {foreign.length > 0 && <div className="automatic-fx"><strong>Dated database FX conversion</strong><p>Review each rate and date before confirming. Rates use dated observations from the selected database.</p>{foreign.map(c => { let rate: number | null = null; try { rate=exchangeRate(c,base,rates); } catch { /* The missing-rate error is shown below. */ } const evidence=rates.find(item => item.pair===`${c}HKD`); return <div key={c}><span>1 {c}<small>{evidence ? `${evidence.date} · ${evidence.source}` : fxLoading ? "Loading FX…" : "Insufficient data"}</small></span><b>{rate===null?"Unavailable":rate.toFixed(6)} {base}</b></div>; })}</div>}

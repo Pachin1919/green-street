@@ -73,6 +73,11 @@ export function dataLabel(status: DataStatus | null) {
   const label = status.mode === "live" && status.is_latest ? "Live database" : "Latest database data";
   return `${label} · ${status.snapshot_date || "date unavailable"}`;
 }
+export function databaseState(status: DataStatus | null, error = ""): "checking" | "unavailable" | "dated" | "current" {
+  if (error || status?.mode === "missing" || status?.mode === "demo") return "unavailable";
+  if (!status) return "checking";
+  return status.mode === "live" && status.is_latest && !status.missing_markets.length ? "current" : "dated";
+}
 export function dateRange(range?: DateRange) {
   if (!range?.end) return "Date unavailable";
   return range.start && range.start !== range.end ? `${range.start} – ${range.end}` : range.end;

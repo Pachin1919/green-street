@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { MagnifyingGlass } from "@phosphor-icons/react";
-import { dataLabel, fetchTalkWalk } from "./dataset";
+import { databaseState, dataLabel, fetchTalkWalk } from "./dataset";
 import type { DataStatus, EnvironmentalFirm, Market, TalkWalkData, TalkWalkFirm } from "./dataset";
 import type { Universe } from "./live";
 import { Button } from "./ui";
@@ -156,7 +156,7 @@ export function TalkWalkPage({ universe, market, datasetId, status }: { universe
   return <div className={`workspace-page ${styles.page}`}>
     <div className="workspace-heading"><div><span className="workspace-eyebrow">ENVIRONMENTAL EVIDENCE</span><h1>Talk &amp; Walk</h1><p>Understand environmental performance, then review the claims and evidence behind it.</p></div></div>
     <section className="workspace-panel"><div className="panel-heading"><div><h2>{company?.name || (selected ? selected : "Select a company")}</h2><p>{selected ? `${selected} · ${company?.sector || "Sector unavailable"}` : `${universe?.size ?? 0} companies in the selected listing market.`}</p></div>{selected && <Button kind="secondary" onClick={() => setChooserOpen(open => !open)}>{chooserOpen ? "Close company selection" : "Change company"}</Button>}</div>
-      <p className={styles.datasetContext}>{datasetId === "builtin" ? "Built-in dataset" : `Mounted dataset · ${datasetId}`} <span>· {status?.dataset_id === datasetId ? dataLabel(status) : "Loading dataset status…"}</span></p>
+      <p className={styles.datasetContext}>{datasetId === "builtin" ? "Built-in dataset" : `Mounted dataset · ${datasetId}`} <span data-state={databaseState(status?.dataset_id === datasetId ? status : null)}>· {status?.dataset_id === datasetId ? dataLabel(status) : "Loading dataset status…"}</span></p>
       <div hidden={!!selected && !chooserOpen}><div className="company-keyword-input"><MagnifyingGlass size={19} /><input value={query} aria-label="Search Talk & Walk companies" placeholder="Search company, ticker or sector" onChange={e => setQuery(e.target.value)} /></div><div className={styles.companyChoices}>{matches.slice(0, 6).map(c => <button type="button" key={c.ticker} aria-pressed={selected === c.ticker} onClick={() => chooseCompany(c.ticker)}><strong>{c.name}</strong><small>{c.ticker} · {c.sector}</small></button>)}</div>{matches.length > 6 && <p className={styles.note}>Showing 6 of {matches.length} matches. Search to find your company.</p>}{!matches.length && <p className={styles.note} role="status">{universe ? "No matching companies in this market." : "Loading companies…"}</p>}</div>
     </section>
     {!selected && <section className="workspace-panel"><p className={styles.note}>Select a company to explore its environmental scores, calculation pathway and stored report evidence.</p></section>}

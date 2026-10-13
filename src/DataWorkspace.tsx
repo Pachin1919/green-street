@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowCounterClockwise, Database, DownloadSimple, FileArrowUp, WarningCircle } from "@phosphor-icons/react";
-import { dataLabel, dateRange, fetchDataSources, fetchDataStatus, readDataset } from "./dataset";
+import { ArrowCounterClockwise, CheckCircle, Clock, Database, DownloadSimple, FileArrowUp, WarningCircle } from "@phosphor-icons/react";
+import { databaseState, dataLabel, dateRange, fetchDataSources, fetchDataStatus, readDataset } from "./dataset";
 import type { DataSources, DataStatus, Market } from "./dataset";
 export { TalkWalkPage } from "./TalkWalkLearning";
 import { download } from "./portfolio";
@@ -10,8 +10,11 @@ import styles from "./DataWorkspace.module.css";
 export function DataStatusBar({ status, error, market, onMarketChange, onSources }: {
   status: DataStatus | null; error: string; market: Market; onMarketChange: (market: Market) => void; onSources: () => void;
 }) {
-  return <div className={styles.statusBar}>
-    <div role="status"><WarningCircle size={18} weight="fill" /><span><strong>{dataLabel(status)}</strong><small>{error || (status?.mode === "demo" ? "Illustrative values for exploring the workspace" : "Coverage periods vary by measure")}</small></span></div>
+  const state = databaseState(status, error);
+  const Icon = state === "unavailable" ? WarningCircle : state === "current" ? CheckCircle : state === "dated" ? Clock : Database;
+  const description = error || (state === "checking" ? "Loading data availability and observation dates" : status?.mode === "demo" ? "Database unavailable · Illustrative values for exploring the workspace" : state === "unavailable" ? "No database coverage for the selected market" : state === "dated" ? `${status?.missing_markets.length ? "Some market coverage is missing · " : ""}Freshness unverified · Coverage periods vary by measure` : "Verified latest database feed · Coverage periods vary by measure");
+  return <div className={styles.statusBar} data-state={state}>
+    <div role="status" aria-label="Database status"><Icon size={18} weight="fill" /><span><strong>{error ? "Database data unavailable" : state === "checking" ? "Checking database data…" : dataLabel(status)}</strong><small>{description}</small></span></div>
     <label>Listing market<select aria-label="Listing market" value={market} onChange={e => onMarketChange(e.target.value as Market)}><option value="all">All · Hong Kong &amp; Taiwan</option><option value="hk">Hong Kong</option><option value="tw">Taiwan</option></select></label>
     <button type="button" onClick={onSources}>Data sources</button>
   </div>;
