@@ -2,7 +2,7 @@
 // CSV and JSON carry raw numbers (weights and returns as fractions); the PDF shows them
 // formatted as on screen.
 import type { Recommendation } from "./api";
-import { comparisonPositions, performanceRows } from "./Comparison";
+import { comparisonChange, comparisonPositions, performanceRows } from "./Comparison";
 import { tradeAction } from "./live";
 import type { Universe } from "./live";
 import { money, percent, score, unitMoney } from "./portfolio";
@@ -36,7 +36,7 @@ export function exportTables(baseline: Portfolio, result: Portfolio, rec: Recomm
     { title: "Portfolio performance", detail: "Old vs new key figures: risk, return, environment, concentration, factor exposures.", file: "portfolio-performance",
       columns: [["section", "Section"], ["metric", "Metric"], ["old_portfolio", "Old portfolio"], ["new_portfolio", "New portfolio"], ["change", "Change"]].map(([key, label]) => ({ key, label })),
       raw: performance.map(({ r, section, delta }) => [section, r.label, round(r.before), round(r.after), round(delta)]),
-      text: performance.map(({ r, section, delta }) => [section, r.label, shown(r.before, r.fmt), shown(r.after, r.fmt), delta === null ? "Unavailable" : `${delta >= 0 ? "+" : "-"}${r.fmt(Math.abs(delta))}`]) },
+      text: performance.map(({ r, section }) => [section, r.label, shown(r.before, r.fmt), shown(r.after, r.fmt), comparisonChange(r.before, r.after, r.changeFmt ?? r.fmt).text]) },
     { title: "Each company / share", detail: "Every position with old and new units, totals and weights.", file: "company-shares",
       columns: [["ticker", "Ticker"], ["company", "Company"], ["sector", "Sector"], [`unit_price_${ccy}`, "Unit price"], ["old_units", "Old units"], ["new_units", "New units"], ["units_change", "Change"], [`old_total_${ccy}`, "Old total"], [`new_total_${ccy}`, "New total"], ["e_score", "E-score"], ["old_weight", "Old weight"], ["new_weight", "New weight"], ["action", "Action"]].map(([key, label]) => ({ key, label })),
       raw: positions.map(({ t, c, action, oldWeight }) => [t.firm_id, c?.name ?? t.firm_id, c?.sector, round(t.price, 3), t.shares_current, t.shares_target, t.shares_delta, round(t.capital_current, 2), round(t.capital_target, 2), c?.score, round(oldWeight), round(t.w_target), action]),
